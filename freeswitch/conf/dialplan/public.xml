@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+    LigAI - Dialplan para chamadas do SIP Trunk (entrantes)
+    Usa mod_audio_fork para streaming bidirecional com IA
+-->
+<include>
+  <context name="public">
+
+    <!-- Chamadas entrantes do SIP Trunk -->
+    <extension name="ligai-inbound">
+      <condition field="destination_number" expression="^(.*)$">
+        <action application="log" data="INFO [LigAI] Chamada entrante de ${caller_id_number} para ${destination_number}"/>
+
+        <!-- Configurações de áudio -->
+        <action application="set" data="RECORD_STEREO=false"/>
+        <action application="set" data="jitterbuffer_msec=60:200:40"/>
+
+        <!-- Configurar para iniciar streaming após atender -->
+        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8765 mono 8000"/>
+
+        <!-- Atender a chamada -->
+        <action application="answer"/>
+        <action application="sleep" data="500"/>
+
+        <action application="log" data="INFO [LigAI] Streaming audio_fork iniciado para ws://127.0.0.1:8765"/>
+
+        <!-- Manter chamada ativa -->
+        <action application="park"/>
+      </condition>
+    </extension>
+
+  </context>
+</include>

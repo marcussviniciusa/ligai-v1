@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!--
+    LigAI - Gateway SIP Trunk
+    IP: 138.59.146.69
+    Tech Prefix: 1290#
+-->
+<include>
+  <gateway name="ligai-trunk">
+    <param name="realm" value="$${sip_trunk_ip}"/>
+    <param name="proxy" value="$${sip_trunk_ip}"/>
+    <param name="register" value="false"/>
+    <param name="caller-id-in-from" value="true"/>
+    <param name="codec-prefs" value="PCMU,PCMA"/>
+    <param name="context" value="public"/>
+  </gateway>
+</include>

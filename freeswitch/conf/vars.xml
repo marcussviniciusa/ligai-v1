@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    LigAI - Variáveis de Configuração do FreeSWITCH
+-->
+<include>
+  <!-- Domínio padrão -->
+  <X-PRE-PROCESS cmd="set" data="domain=localhost"/>
+  <X-PRE-PROCESS cmd="set" data="domain_name=$${domain}"/>
+
+  <!-- Senha padrão para extensões internas -->
+  <X-PRE-PROCESS cmd="set" data="default_password=ligai2024"/>
+
+  <!-- Codecs de áudio -->
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMU,PCMA,OPUS"/>
+  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMU,PCMA"/>
+
+  <!-- Diretórios -->
+  <X-PRE-PROCESS cmd="set" data="sound_prefix=/var/lib/freeswitch/sounds/custom"/>
+  <X-PRE-PROCESS cmd="set" data="recordings_dir=/var/lib/freeswitch/recordings"/>
+
+  <!-- SIP Trunk Configuration -->
+  <X-PRE-PROCESS cmd="set" data="sip_trunk_ip=138.59.146.69"/>
+  <X-PRE-PROCESS cmd="set" data="tech_prefix=1290#"/>
+
+  <!-- Configurações RTP -->
+  <X-PRE-PROCESS cmd="set" data="rtp_start_port=16384"/>
+  <X-PRE-PROCESS cmd="set" data="rtp_end_port=32768"/>
+
+  <!-- Portas SIP -->
+  <X-PRE-PROCESS cmd="set" data="internal_sip_port=5060"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_port=5080"/>
+
+  <!-- Endereço externo (ajustar para seu IP público) -->
+  <X-PRE-PROCESS cmd="stun-set" data="external_rtp_ip=stun:stun.freeswitch.org"/>
+  <X-PRE-PROCESS cmd="stun-set" data="external_sip_ip=stun:stun.freeswitch.org"/>
+</include>

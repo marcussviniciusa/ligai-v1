@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<configuration name="spandsp.conf" description="SpanDSP Configuration">
+  <settings>
+    <param name="sched-max-depth" value="1000"/>
+  </settings>
+</configuration>

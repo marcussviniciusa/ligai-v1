@@ -1,0 +1,36 @@
+services:
+  freeswitch:
+    build:
+      context: ./freeswitch
+      dockerfile: Dockerfile
+    container_name: ligai-freeswitch
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./freeswitch/conf:/usr/local/freeswitch/conf
+      - ./audio:/var/lib/freeswitch/sounds/custom
+      - ./logs/freeswitch:/var/log/freeswitch
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+
+  ligai-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ligai-app
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./app:/app
+      - ./audio:/audio
+      - ./logs/app:/logs
+    environment:
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - MURF_API_KEY=${MURF_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOG_LEVEL=INFO
+      - WEBSOCKET_HOST=0.0.0.0
+      - WEBSOCKET_PORT=8765
+    depends_on:
+      - freeswitch

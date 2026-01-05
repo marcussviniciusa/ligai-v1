@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!--
+    LigAI - Módulos a Carregar
+-->
+<configuration name="modules.conf" description="Modules">
+  <modules>
+    <!-- Loggers -->
+    <load module="mod_console"/>
+    <load module="mod_logfile"/>
+
+    <!-- Event Handlers -->
+    <load module="mod_event_socket"/>
+
+    <!-- Endpoints -->
+    <load module="mod_sofia"/>
+
+    <!-- Dialplan -->
+    <load module="mod_dialplan_xml"/>
+
+    <!-- Applications -->
+    <load module="mod_commands"/>
+    <load module="mod_dptools"/>
+    <load module="mod_expr"/>
+    <load module="mod_hash"/>
+    <load module="mod_park"/>
+
+    <!-- Codecs -->
+    <load module="mod_g711"/>
+    <load module="mod_opus"/>
+
+    <!-- File Formats -->
+    <load module="mod_sndfile"/>
+    <load module="mod_native_file"/>
+    <load module="mod_tone_stream"/>
+    <load module="mod_local_stream"/>
+
+    <!-- Say -->
+    <load module="mod_say_pt"/>
+
+    <!-- Audio Streaming para IA (mod_audio_fork do drachtio) -->
+    <load module="mod_audio_fork"/>
+  </modules>
+</configuration>

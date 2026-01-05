@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!--
+    LigAI - Dialplan para chamadas internas/saintes
+-->
+<include>
+  <context name="default">
+
+    <!-- Chamadas saintes via SIP Trunk -->
+    <extension name="outbound-trunk">
+      <condition field="destination_number" expression="^(\d{10,11})$">
+        <action application="log" data="INFO [LigAI] Chamada sainte para $1"/>
+        <action application="set" data="effective_caller_id_number=${caller_id_number}"/>
+        <action application="bridge" data="sofia/gateway/ligai-trunk/$${tech_prefix}$1"/>
+      </condition>
+    </extension>
+
+    <!-- Extensão 9999 - Teste de IA -->
+    <extension name="ligai-test">
+      <condition field="destination_number" expression="^9999$">
+        <action application="log" data="INFO [LigAI] Teste de chamada IA"/>
+        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8765 mono 8000"/>
+        <action application="answer"/>
+        <action application="sleep" data="500"/>
+        <action application="park"/>
+      </condition>
+    </extension>
+
+    <!-- Echo test -->
+    <extension name="echo">
+      <condition field="destination_number" expression="^9196$">
+        <action application="answer"/>
+        <action application="echo"/>
+      </condition>
+    </extension>
+
+    <!-- Chamada com saudação IA + echo -->
+    <extension name="ai-greeting-echo">
+      <condition field="destination_number" expression="^ai-echo$">
+        <action application="log" data="INFO [LigAI] Saudação IA + echo"/>
+        <action application="playback" data="/var/lib/freeswitch/sounds/custom/greeting.wav"/>
+        <action application="sleep" data="1000"/>
+        <action application="echo"/>
+      </condition>
+    </extension>
+
+  </context>
+</include>
