@@ -9,7 +9,15 @@ import random
 import time
 import uuid as uuid_lib
 import wave
+from enum import Enum
 from typing import Optional
+
+
+class ConversationState(Enum):
+    """Estados da máquina de estados de conversação"""
+    IDLE = "idle"           # Pronto para receber entrada do usuário
+    PROCESSING = "processing"  # Gerando resposta (filler + LLM)
+    SPEAKING = "speaking"   # Tocando áudio da resposta
 
 import aiofiles
 import structlog
@@ -163,9 +171,10 @@ class CallHandler:
         self.start_time = time.time()
         self.transcript_buffer = ""
         self.last_speech_time = time.time()
-        self.is_speaking = False  # Usuário está falando
-        self.is_ai_speaking = False  # IA está falando (controle de interrupção)
-        self.pending_user_message: Optional[str] = None  # Mensagem pendente enquanto IA fala
+        self.is_speaking = False  # Usuário está falando (detectado pelo Deepgram)
+
+        # Máquina de estados para controle de conversação
+        self.state = ConversationState.IDLE
         self.conversation_history: list[dict] = []
 
         # Prompt do sistema para o assistente
@@ -245,22 +254,23 @@ REGRAS OBRIGATÓRIAS:
             call_id=self.call_id,
             text=text,
             is_final=is_final,
-            is_ai_speaking=self.is_ai_speaking
+            state=self.state.value
         )
 
         if is_final:
             self.transcript_buffer = ""
 
-            # Se a IA está falando, guardar mensagem para processar depois
-            if self.is_ai_speaking:
+            # Só processa se estiver em IDLE
+            if self.state == ConversationState.IDLE:
+                await self._process_user_input(text)
+            else:
+                # PROCESSING ou SPEAKING: ignorar mensagem (não guardar)
+                # Isso é mais natural em ligação - pessoa precisa esperar IA terminar
                 logger.info(
-                    "IA ainda está falando, guardando mensagem para depois",
+                    f"Estado {self.state.value}: ignorando mensagem (IA ocupada)",
                     call_id=self.call_id,
                     text=text
                 )
-                self.pending_user_message = text
-            else:
-                await self._process_user_input(text)
         else:
             self.transcript_buffer = text
 
@@ -279,8 +289,8 @@ REGRAS OBRIGATÓRIAS:
         """Processa entrada do usuário e gera resposta"""
         logger.info("Processando entrada do usuário", call_id=self.call_id, text=text)
 
-        # Marcar que a IA está falando (inclui filler + resposta)
-        self.is_ai_speaking = True
+        # Transição: IDLE → PROCESSING
+        self.state = ConversationState.PROCESSING
 
         # Adicionar ao histórico
         self.conversation_history.append({
@@ -324,7 +334,10 @@ REGRAS OBRIGATÓRIAS:
             if filler_task:
                 await filler_task
 
-            # Converter para áudio e enviar (is_ai_speaking será resetado no finally do _speak)
+            # Transição: PROCESSING → SPEAKING
+            self.state = ConversationState.SPEAKING
+
+            # Converter para áudio e enviar
             await self._speak(response)
 
         except Exception as e:
@@ -384,6 +397,9 @@ REGRAS OBRIGATÓRIAS:
 
     async def _send_greeting(self):
         """Envia saudação inicial"""
+        # Transição: IDLE → SPEAKING (saudação não precisa de PROCESSING)
+        self.state = ConversationState.SPEAKING
+
         greeting = "Olá! Bem-vindo ao atendimento. Como posso ajudar você hoje?"
         self.conversation_history.append({
             "role": "assistant",
@@ -399,9 +415,6 @@ REGRAS OBRIGATÓRIAS:
         """
         if not self.is_running or not self.murf:
             return
-
-        # Marcar que a IA está falando
-        self.is_ai_speaking = True
 
         try:
             logger.info("Gerando áudio TTS", call_id=self.call_id, text=text[:50])
@@ -431,19 +444,9 @@ REGRAS OBRIGATÓRIAS:
         except Exception as e:
             logger.exception("Erro ao gerar/enviar áudio", call_id=self.call_id, error=str(e))
         finally:
-            # Marcar que a IA terminou de falar
-            self.is_ai_speaking = False
-
-            # Verificar se há mensagem pendente do usuário
-            if self.pending_user_message:
-                pending = self.pending_user_message
-                self.pending_user_message = None
-                logger.info(
-                    "Processando mensagem pendente do usuário",
-                    call_id=self.call_id,
-                    text=pending
-                )
-                await self._process_user_input(pending)
+            # Transição: SPEAKING → IDLE
+            self.state = ConversationState.IDLE
+            logger.debug(f"Estado: IDLE (pronto para próxima entrada)", call_id=self.call_id)
 
     async def _save_audio_file(self, audio_data: bytes) -> tuple[Optional[str], Optional[str]]:
         """Salva áudio raw PCM como arquivo WAV
