@@ -73,6 +73,7 @@ class MurfClient:
                 "format": "WAV",
                 "sampleRate": 24000,  # Murf gera em 24kHz, vamos converter
                 "channelType": "MONO",
+                "speed": 0.9,  # Velocidade um pouco mais lenta (0.5 a 2.0, 1.0 é normal)
                 "pronunciationDictionary": {},
                 "encodeAsBase64": False,
                 "modelVersion": "GEN2"  # Usar modelo mais recente

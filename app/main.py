@@ -15,7 +15,7 @@ import structlog
 import uvloop
 import websockets
 
-from call_handler import CallHandler
+from call_handler import CallHandler, initialize_fillers
 from config import settings
 
 # Configurar logging
@@ -177,6 +177,9 @@ async def main():
     port = settings.WEBSOCKET_PORT
 
     logger.info(f"Iniciando LigAI WebSocket Server em {host}:{port}")
+
+    # Pré-gerar áudios de filler para reduzir latência
+    await initialize_fillers()
 
     # Configurar shutdown graceful
     stop = asyncio.Event()
