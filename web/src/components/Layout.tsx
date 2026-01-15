@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Phone, MessageSquare, History, LayoutDashboard, Settings } from 'lucide-react';
+import { Phone, MessageSquare, History, LayoutDashboard, Settings, Webhook, Calendar, Users, Book } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface LayoutProps {
@@ -10,8 +10,12 @@ interface LayoutProps {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Prompts', href: '/prompts', icon: MessageSquare },
+  { name: 'Agendamentos', href: '/schedules', icon: Calendar },
+  { name: 'Campanhas', href: '/campaigns', icon: Users },
   { name: 'Historico', href: '/history', icon: History },
+  { name: 'Webhooks', href: '/webhooks', icon: Webhook },
   { name: 'Configuracoes', href: '/settings', icon: Settings },
+  { name: 'Documentacao', href: '/docs', icon: Book },
 ];
 
 export function Layout({ children }: LayoutProps) {

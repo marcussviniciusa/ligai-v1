@@ -168,3 +168,210 @@ class CallMessage(Base):
             "audio_duration_ms": self.audio_duration_ms,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
+
+
+# === WEBHOOKS ===
+
+class WebhookConfig(Base):
+    """Webhook configuration"""
+
+    __tablename__ = "webhook_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    events: Mapped[str] = mapped_column(Text, nullable=False)  # JSON array
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    secret: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    logs: Mapped[List["WebhookLog"]] = relationship(
+        back_populates="config", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self) -> dict:
+        import json
+        return {
+            "id": self.id,
+            "url": self.url,
+            "events": json.loads(self.events) if self.events else [],
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class WebhookLog(Base):
+    """Webhook delivery log"""
+
+    __tablename__ = "webhook_logs"
+    __table_args__ = (
+        Index("idx_webhook_logs_config", "config_id"),
+        Index("idx_webhook_logs_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    config_id: Mapped[int] = mapped_column(
+        ForeignKey("webhook_configs.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    config: Mapped["WebhookConfig"] = relationship(back_populates="logs")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "config_id": self.config_id,
+            "event_type": self.event_type,
+            "status_code": self.status_code,
+            "success": self.success,
+            "attempt": self.attempt,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# === SCHEDULED CALLS ===
+
+class ScheduledCall(Base):
+    """Scheduled call"""
+
+    __tablename__ = "scheduled_calls"
+    __table_args__ = (
+        Index("idx_scheduled_calls_time", "scheduled_time"),
+        Index("idx_scheduled_calls_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    prompt_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("prompts.id"), nullable=True
+    )
+    scheduled_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    call_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    prompt: Mapped[Optional["Prompt"]] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "phone_number": self.phone_number,
+            "prompt_id": self.prompt_id,
+            "scheduled_time": self.scheduled_time.isoformat() if self.scheduled_time else None,
+            "status": self.status,
+            "call_id": self.call_id,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+# === CAMPAIGNS ===
+
+class Campaign(Base):
+    """Campaign for batch dialing"""
+
+    __tablename__ = "campaigns"
+    __table_args__ = (Index("idx_campaigns_status", "status"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prompt_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("prompts.id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    max_concurrent: Mapped[int] = mapped_column(Integer, default=5)
+    total_contacts: Mapped[int] = mapped_column(Integer, default=0)
+    completed_contacts: Mapped[int] = mapped_column(Integer, default=0)
+    failed_contacts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Relationships
+    prompt: Mapped[Optional["Prompt"]] = relationship()
+    contacts: Mapped[List["CampaignContact"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "prompt_id": self.prompt_id,
+            "status": self.status,
+            "max_concurrent": self.max_concurrent,
+            "total_contacts": self.total_contacts,
+            "completed_contacts": self.completed_contacts,
+            "failed_contacts": self.failed_contacts,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
+
+
+class CampaignContact(Base):
+    """Contact in a campaign"""
+
+    __tablename__ = "campaign_contacts"
+    __table_args__ = (
+        Index("idx_campaign_contacts_campaign", "campaign_id"),
+        Index("idx_campaign_contacts_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False
+    )
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    extra_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    call_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    campaign: Mapped["Campaign"] = relationship(back_populates="contacts")
+
+    def to_dict(self) -> dict:
+        import json
+        return {
+            "id": self.id,
+            "campaign_id": self.campaign_id,
+            "phone_number": self.phone_number,
+            "name": self.name,
+            "extra_data": json.loads(self.extra_data) if self.extra_data else None,
+            "status": self.status,
+            "call_id": self.call_id,
+            "attempts": self.attempts,
+            "last_attempt_at": self.last_attempt_at.isoformat() if self.last_attempt_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error_message": self.error_message,
+        }

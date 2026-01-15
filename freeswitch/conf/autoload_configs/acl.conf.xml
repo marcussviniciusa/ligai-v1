@@ -20,5 +20,5 @@
 
     <list name="domains" default="deny">
     </list>
-  <list name="socket_acl" default="deny"><node type="allow" cidr="0.0.0.0/0"/></list></network-lists>
+  <list name="socket_acl" default="deny"><node type="allow" cidr="0.0.0.0/0"/></list><list name="socket_acl" default="deny"><node type="allow" cidr="0.0.0.0/0"/></list></network-lists>
 </configuration>

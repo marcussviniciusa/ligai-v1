@@ -9,7 +9,10 @@ from sqlalchemy import select, update, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Prompt, Call, CallMessage, Setting
+from .models import (
+    Prompt, Call, CallMessage, Setting,
+    WebhookConfig, WebhookLog, ScheduledCall, Campaign, CampaignContact
+)
 
 
 # === Prompt CRUD ===
@@ -377,3 +380,386 @@ async def init_default_settings(db: AsyncSession) -> None:
             db.add(setting)
 
     await db.flush()
+
+
+# === Webhook CRUD ===
+
+async def get_webhook_config(db: AsyncSession, webhook_id: int) -> Optional[WebhookConfig]:
+    """Get a webhook config by ID"""
+    result = await db.execute(
+        select(WebhookConfig).where(WebhookConfig.id == webhook_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_webhook_configs(db: AsyncSession) -> List[WebhookConfig]:
+    """Get all webhook configs"""
+    result = await db.execute(
+        select(WebhookConfig).order_by(WebhookConfig.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_active_webhook_configs(
+    db: AsyncSession,
+    event_type: str
+) -> List[WebhookConfig]:
+    """Get active webhook configs that subscribe to a specific event"""
+    result = await db.execute(
+        select(WebhookConfig).where(
+            WebhookConfig.is_active == True,
+            WebhookConfig.events.contains(event_type)
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def create_webhook_config(db: AsyncSession, **kwargs) -> WebhookConfig:
+    """Create a new webhook config"""
+    webhook = WebhookConfig(**kwargs)
+    db.add(webhook)
+    await db.flush()
+    await db.refresh(webhook)
+    return webhook
+
+
+async def update_webhook_config(
+    db: AsyncSession,
+    webhook_id: int,
+    **kwargs
+) -> Optional[WebhookConfig]:
+    """Update a webhook config"""
+    webhook = await get_webhook_config(db, webhook_id)
+    if not webhook:
+        return None
+
+    for key, value in kwargs.items():
+        if hasattr(webhook, key) and value is not None:
+            setattr(webhook, key, value)
+
+    webhook.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(webhook)
+    return webhook
+
+
+async def delete_webhook_config(db: AsyncSession, webhook_id: int) -> bool:
+    """Delete a webhook config"""
+    result = await db.execute(
+        delete(WebhookConfig).where(WebhookConfig.id == webhook_id)
+    )
+    return result.rowcount > 0
+
+
+async def create_webhook_log(db: AsyncSession, **kwargs) -> WebhookLog:
+    """Create a webhook delivery log"""
+    log = WebhookLog(**kwargs)
+    db.add(log)
+    await db.flush()
+    return log
+
+
+async def get_webhook_logs(
+    db: AsyncSession,
+    config_id: int,
+    limit: int = 50
+) -> List[WebhookLog]:
+    """Get logs for a webhook config"""
+    result = await db.execute(
+        select(WebhookLog)
+        .where(WebhookLog.config_id == config_id)
+        .order_by(WebhookLog.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+# === ScheduledCall CRUD ===
+
+async def get_scheduled_call(db: AsyncSession, schedule_id: int) -> Optional[ScheduledCall]:
+    """Get a scheduled call by ID"""
+    result = await db.execute(
+        select(ScheduledCall).where(ScheduledCall.id == schedule_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_scheduled_calls(
+    db: AsyncSession,
+    status: Optional[str] = None,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+) -> List[ScheduledCall]:
+    """Get scheduled calls with optional filters"""
+    query = select(ScheduledCall).order_by(ScheduledCall.scheduled_time.asc())
+
+    if status:
+        query = query.where(ScheduledCall.status == status)
+    if from_date:
+        query = query.where(ScheduledCall.scheduled_time >= from_date)
+    if to_date:
+        query = query.where(ScheduledCall.scheduled_time <= to_date)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_due_scheduled_calls(
+    db: AsyncSession,
+    until: datetime
+) -> List[ScheduledCall]:
+    """Get scheduled calls that are due to be executed"""
+    result = await db.execute(
+        select(ScheduledCall)
+        .where(
+            ScheduledCall.status == "pending",
+            ScheduledCall.scheduled_time <= until
+        )
+        .order_by(ScheduledCall.scheduled_time.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def create_scheduled_call(db: AsyncSession, **kwargs) -> ScheduledCall:
+    """Create a new scheduled call"""
+    scheduled = ScheduledCall(**kwargs)
+    db.add(scheduled)
+    await db.flush()
+    await db.refresh(scheduled)
+    return scheduled
+
+
+async def update_scheduled_call(
+    db: AsyncSession,
+    schedule_id: int,
+    **kwargs
+) -> Optional[ScheduledCall]:
+    """Update a scheduled call"""
+    scheduled = await get_scheduled_call(db, schedule_id)
+    if not scheduled:
+        return None
+
+    for key, value in kwargs.items():
+        if hasattr(scheduled, key) and value is not None:
+            setattr(scheduled, key, value)
+
+    scheduled.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(scheduled)
+    return scheduled
+
+
+async def delete_scheduled_call(db: AsyncSession, schedule_id: int) -> bool:
+    """Delete a scheduled call"""
+    result = await db.execute(
+        delete(ScheduledCall).where(ScheduledCall.id == schedule_id)
+    )
+    return result.rowcount > 0
+
+
+# === Campaign CRUD ===
+
+async def get_campaign(db: AsyncSession, campaign_id: int) -> Optional[Campaign]:
+    """Get a campaign by ID"""
+    result = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_campaigns(
+    db: AsyncSession,
+    status: Optional[str] = None
+) -> List[Campaign]:
+    """Get all campaigns with optional status filter"""
+    query = select(Campaign).order_by(Campaign.created_at.desc())
+
+    if status:
+        query = query.where(Campaign.status == status)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def create_campaign(db: AsyncSession, **kwargs) -> Campaign:
+    """Create a new campaign"""
+    campaign = Campaign(**kwargs)
+    db.add(campaign)
+    await db.flush()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def update_campaign(
+    db: AsyncSession,
+    campaign_id: int,
+    **kwargs
+) -> Optional[Campaign]:
+    """Update a campaign"""
+    campaign = await get_campaign(db, campaign_id)
+    if not campaign:
+        return None
+
+    for key, value in kwargs.items():
+        if hasattr(campaign, key) and value is not None:
+            setattr(campaign, key, value)
+
+    campaign.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def delete_campaign(db: AsyncSession, campaign_id: int) -> bool:
+    """Delete a campaign and all its contacts"""
+    result = await db.execute(
+        delete(Campaign).where(Campaign.id == campaign_id)
+    )
+    return result.rowcount > 0
+
+
+# === CampaignContact CRUD ===
+
+async def get_campaign_contact(
+    db: AsyncSession,
+    contact_id: int
+) -> Optional[CampaignContact]:
+    """Get a campaign contact by ID"""
+    result = await db.execute(
+        select(CampaignContact).where(CampaignContact.id == contact_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_campaign_contacts(
+    db: AsyncSession,
+    campaign_id: int,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50
+) -> List[CampaignContact]:
+    """Get contacts for a campaign"""
+    query = select(CampaignContact).where(
+        CampaignContact.campaign_id == campaign_id
+    ).order_by(CampaignContact.id.asc())
+
+    if status:
+        query = query.where(CampaignContact.status == status)
+
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def count_campaign_contacts(
+    db: AsyncSession,
+    campaign_id: int,
+    status: Optional[str] = None
+) -> int:
+    """Count contacts in a campaign"""
+    query = select(func.count(CampaignContact.id)).where(
+        CampaignContact.campaign_id == campaign_id
+    )
+
+    if status:
+        query = query.where(CampaignContact.status == status)
+
+    result = await db.execute(query)
+    return result.scalar() or 0
+
+
+async def get_next_pending_contact(
+    db: AsyncSession,
+    campaign_id: int
+) -> Optional[CampaignContact]:
+    """Get next pending contact to call"""
+    result = await db.execute(
+        select(CampaignContact)
+        .where(
+            CampaignContact.campaign_id == campaign_id,
+            CampaignContact.status == "pending"
+        )
+        .order_by(CampaignContact.id.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_campaign_contact(db: AsyncSession, **kwargs) -> CampaignContact:
+    """Create a campaign contact"""
+    contact = CampaignContact(**kwargs)
+    db.add(contact)
+    await db.flush()
+    await db.refresh(contact)
+    return contact
+
+
+async def create_campaign_contacts_bulk(
+    db: AsyncSession,
+    campaign_id: int,
+    contacts: List[dict]
+) -> int:
+    """Create multiple campaign contacts"""
+    count = 0
+    for contact_data in contacts:
+        contact = CampaignContact(
+            campaign_id=campaign_id,
+            phone_number=contact_data["phone_number"],
+            name=contact_data.get("name"),
+            extra_data=contact_data.get("extra_data"),
+        )
+        db.add(contact)
+        count += 1
+
+    await db.flush()
+    return count
+
+
+async def update_campaign_contact(
+    db: AsyncSession,
+    contact_id: int,
+    **kwargs
+) -> Optional[CampaignContact]:
+    """Update a campaign contact"""
+    contact = await get_campaign_contact(db, contact_id)
+    if not contact:
+        return None
+
+    for key, value in kwargs.items():
+        if hasattr(contact, key) and value is not None:
+            setattr(contact, key, value)
+
+    await db.flush()
+    await db.refresh(contact)
+    return contact
+
+
+async def get_campaign_contact_stats(
+    db: AsyncSession,
+    campaign_id: int
+) -> dict:
+    """Get contact statistics for a campaign"""
+    total = await count_campaign_contacts(db, campaign_id)
+    pending = await count_campaign_contacts(db, campaign_id, "pending")
+    calling = await count_campaign_contacts(db, campaign_id, "calling")
+    completed = await count_campaign_contacts(db, campaign_id, "completed")
+    failed = await count_campaign_contacts(db, campaign_id, "failed")
+
+    success_rate = (completed / total * 100) if total > 0 else 0
+
+    return {
+        "total": total,
+        "pending": pending,
+        "calling": calling,
+        "completed": completed,
+        "failed": failed,
+        "success_rate": round(success_rate, 1),
+    }
+
+
+async def count_campaign_active_calls(
+    db: AsyncSession,
+    campaign_id: int
+) -> int:
+    """Count active calls (status=calling) for a campaign"""
+    return await count_campaign_contacts(db, campaign_id, "calling")

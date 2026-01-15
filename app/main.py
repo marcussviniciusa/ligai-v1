@@ -69,11 +69,18 @@ async def lifespan(app: FastAPI):
     # Pre-generate filler audio
     await initialize_fillers()
 
+    # Start scheduler for scheduled calls
+    from services.scheduler_service import start_scheduler, stop_scheduler
+    await start_scheduler()
+
     logger.info("LigAI iniciado com sucesso")
     yield
 
     # Shutdown
     logger.info("Encerrando LigAI...")
+
+    # Stop scheduler
+    await stop_scheduler()
 
     # Close all active calls
     logger.info(f"Encerrando {len(active_calls)} chamadas ativas...")
@@ -104,11 +111,14 @@ app.add_middleware(
 )
 
 # Include API routes
-from api.routes import prompts, calls, dashboard
+from api.routes import prompts, calls, dashboard, webhooks, schedules, campaigns
 from api.routes import settings as settings_routes
 
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
 app.include_router(calls.router, prefix="/api/v1/calls", tags=["calls"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
+app.include_router(schedules.router, prefix="/api/v1/schedules", tags=["schedules"])
+app.include_router(campaigns.router, prefix="/api/v1/campaigns", tags=["campaigns"])
 app.include_router(settings_routes.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(dashboard.router, tags=["dashboard"])
 
@@ -238,6 +248,14 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
             "start_time": handler.start_time.isoformat() if handler.start_time else None,
         })
 
+        # Dispatch webhook event
+        from services.webhook_service import dispatch_event
+        await dispatch_event("call.started", {
+            "call_id": call_id,
+            "called_number": called_number,
+            "start_time": handler.start_time.isoformat() if handler.start_time else None,
+        })
+
         # Start the handler (connects to Deepgram, etc)
         await handler.start()
 
@@ -278,10 +296,18 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
     finally:
         # Emit call ended event to dashboard
         duration = 0
+        transcript = []
         if handler:
             from api.routes.dashboard import emit_call_ended
             duration = handler.get_duration() if hasattr(handler, 'get_duration') else 0
             await emit_call_ended(call_id, duration)
+
+            # Get transcript for webhook
+            if hasattr(handler, 'conversation_history'):
+                transcript = [
+                    {"role": m.get("role", "unknown"), "content": m.get("content", "")}
+                    for m in handler.conversation_history
+                ]
 
         # Update call in database
         try:
@@ -294,6 +320,17 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
                 logger.info("Chamada atualizada no banco", call_id=call_id, duration=duration)
         except Exception as e:
             logger.error("Erro ao atualizar chamada no banco", error=str(e))
+
+        # Dispatch webhook event
+        try:
+            from services.webhook_service import dispatch_event
+            await dispatch_event("call.ended", {
+                "call_id": call_id,
+                "duration": duration,
+                "transcript": transcript,
+            })
+        except Exception as e:
+            logger.error("Erro ao enviar webhook call.ended", error=str(e))
 
         # Cleanup
         if handler:
@@ -318,6 +355,12 @@ if os.path.exists(STATIC_DIR) and os.path.isdir(STATIC_DIR):
         # Skip API and WS routes
         if path.startswith("api/") or path.startswith("ws/") or path == "health":
             return None
+
+        # Check if requesting a static file that exists
+        static_file = os.path.join(STATIC_DIR, path)
+        if os.path.isfile(static_file):
+            return FileResponse(static_file)
+
         # Serve index.html for SPA routing
         if os.path.exists(INDEX_FILE):
             return FileResponse(INDEX_FILE)

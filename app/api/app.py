@@ -46,10 +46,14 @@ def create_app() -> FastAPI:
     )
 
     # Include routers
-    from .routes import prompts, calls, dashboard
+    from .routes import prompts, calls, dashboard, webhooks, schedules, campaigns, settings
 
     app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
     app.include_router(calls.router, prefix="/api/v1/calls", tags=["calls"])
+    app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
+    app.include_router(schedules.router, prefix="/api/v1/schedules", tags=["schedules"])
+    app.include_router(campaigns.router, prefix="/api/v1/campaigns", tags=["campaigns"])
+    app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
     app.include_router(dashboard.router, tags=["dashboard"])
 
     # Health check endpoint
