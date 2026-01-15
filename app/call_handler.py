@@ -9,8 +9,9 @@ import random
 import time
 import uuid as uuid_lib
 import wave
+from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 
 
 class ConversationState(Enum):
@@ -154,8 +155,9 @@ class CallHandler:
         call_id: str,
         caller_number: str,
         called_number: str,
-        websocket: WebSocketServerProtocol,
-        freeswitch_uuid: str = None
+        websocket: Any,  # Can be WebSocketServerProtocol or FastAPI WebSocket
+        freeswitch_uuid: str = None,
+        prompt_config: Optional[dict] = None
     ):
         self.call_id = call_id
         self.caller_number = caller_number
@@ -168,7 +170,8 @@ class CallHandler:
         self.llm: Optional[LLMClient] = None
 
         self.is_running = False
-        self.start_time = time.time()
+        self.start_time = datetime.utcnow()
+        self._start_timestamp = time.time()
         self.transcript_buffer = ""
         self.last_speech_time = time.time()
         self.is_speaking = False  # Usuário está falando (detectado pelo Deepgram)
@@ -177,8 +180,17 @@ class CallHandler:
         self.state = ConversationState.IDLE
         self.conversation_history: list[dict] = []
 
+        # Prompt configuration (from database or default)
+        self.prompt_config = prompt_config
+
         # Prompt do sistema para o assistente
-        self.system_prompt = """Você é um assistente virtual de atendimento telefônico.
+        if prompt_config and prompt_config.get("system_prompt"):
+            self.system_prompt = prompt_config["system_prompt"]
+            self.voice_id = prompt_config.get("voice_id", settings.MURF_VOICE_ID)
+            self.llm_model = prompt_config.get("llm_model", settings.LLM_MODEL)
+            self.llm_temperature = prompt_config.get("temperature", settings.LLM_TEMPERATURE)
+        else:
+            self.system_prompt = """Você é um assistente virtual de atendimento telefônico.
 Seja cordial, objetivo e helpful. Responda de forma natural e conversacional.
 Se não entender algo, peça educadamente para repetir.
 
@@ -186,6 +198,9 @@ REGRAS OBRIGATÓRIAS:
 1. Respostas MUITO CURTAS - máximo 1-2 frases. Isso é uma ligação telefônica, não um texto.
 2. NUNCA comece com frases de confirmação como "Entendi", "Compreendi", "Certo", "Ok", "Perfeito", "Claro" - o sistema já fala isso automaticamente.
 3. Vá direto ao ponto, sem enrolação."""
+            self.voice_id = settings.MURF_VOICE_ID
+            self.llm_model = settings.LLM_MODEL
+            self.llm_temperature = settings.LLM_TEMPERATURE
 
     async def start(self):
         """Inicia os clientes de STT, TTS e LLM"""
@@ -217,7 +232,7 @@ REGRAS OBRIGATÓRIAS:
         if self.deepgram:
             await self.deepgram.disconnect()
 
-        duration = time.time() - self.start_time
+        duration = self.get_duration()
         logger.info(
             "CallHandler encerrado",
             call_id=self.call_id,
@@ -549,13 +564,20 @@ REGRAS OBRIGATÓRIAS:
         except Exception as e:
             logger.exception("Erro ao reproduzir áudio via ESL", error=str(e))
 
+    def get_duration(self) -> float:
+        """Retorna duração da chamada em segundos"""
+        return time.time() - self._start_timestamp
+
     def get_status(self) -> dict:
         """Retorna status da chamada"""
         return {
             "call_id": self.call_id,
-            "caller": self.caller_number,
-            "called": self.called_number,
-            "duration": time.time() - self.start_time,
-            "is_speaking": self.is_speaking,
-            "messages": len(self.conversation_history)
+            "freeswitch_uuid": self.freeswitch_uuid,
+            "caller_number": self.caller_number,
+            "called_number": self.called_number,
+            "state": self.state.value,
+            "duration": self.get_duration(),
+            "is_user_speaking": self.is_speaking,
+            "message_count": len(self.conversation_history),
+            "start_time": self.start_time.isoformat() if self.start_time else None,
         }

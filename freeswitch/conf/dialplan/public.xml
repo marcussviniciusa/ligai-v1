@@ -16,7 +16,7 @@
         <action application="set" data="jitterbuffer_msec=60:200:40"/>
 
         <!-- Configurar para iniciar streaming após atender (com metadata JSON para passar UUID) -->
-        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8765 mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
+        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8000/ws/${uuid} mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
 
         <!-- Atender a chamada -->
         <action application="answer"/>

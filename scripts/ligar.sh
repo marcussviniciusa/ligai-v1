@@ -16,7 +16,7 @@ echo "Fazendo ligação para $NUMERO..."
 echo "UUID: $UUID"
 
 # Fazer a chamada com api_on_answer para conectar audio_fork automaticamente
-RESULT=$(docker exec ligai-freeswitch fs_cli -x "originate {origination_uuid=$UUID,ignore_early_media=true,api_on_answer='uuid_audio_fork $UUID start ws://127.0.0.1:8765 mono 8000 {\"uuid\":\"$UUID\"}'}sofia/gateway/ligai-trunk/1290#$NUMERO &park" 2>&1)
+RESULT=$(docker exec ligai-freeswitch fs_cli -x "originate {origination_uuid=$UUID,ignore_early_media=true,api_on_answer='uuid_audio_fork $UUID start ws://127.0.0.1:8000/ws/$UUID mono 8000 {\"uuid\":\"$UUID\"}'}sofia/gateway/ligai-trunk/1290#$NUMERO &park" 2>&1)
 
 if echo "$RESULT" | grep -q "+OK"; then
     echo "Chamada iniciada com sucesso!"

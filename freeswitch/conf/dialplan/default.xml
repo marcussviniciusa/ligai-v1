@@ -18,7 +18,7 @@
     <extension name="ligai-test">
       <condition field="destination_number" expression="^9999$">
         <action application="log" data="INFO [LigAI] Teste de chamada IA"/>
-        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8765 mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
+        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8000/ws/${uuid} mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
         <action application="answer"/>
         <action application="sleep" data="500"/>
         <action application="park"/>
@@ -30,7 +30,7 @@
       <condition field="destination_number" expression="^ligai-(.+)$">
         <action application="log" data="INFO [LigAI] Chamada IA para $1"/>
         <action application="set" data="ignore_early_media=true"/>
-        <action application="export" data="nolocal:api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8765 mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
+        <action application="export" data="nolocal:api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8000/ws/${uuid} mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;}"/>
         <action application="bridge" data="sofia/gateway/ligai-trunk/$${tech_prefix}$1"/>
       </condition>
     </extension>

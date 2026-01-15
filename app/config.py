@@ -36,7 +36,7 @@ class Settings:
     MURF_STYLE: str = "conversational"
 
     # LLM Settings
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4.1-nano")
     LLM_MAX_TOKENS: int = 500
     LLM_TEMPERATURE: float = 0.7
 
@@ -47,6 +47,18 @@ class Settings:
     # Timeouts
     SILENCE_TIMEOUT: float = 2.0  # segundos de silêncio para considerar fim de fala
     MAX_CALL_DURATION: int = 3600  # 1 hora máximo
+
+    # Web Server
+    WEB_PORT: int = int(os.getenv("WEB_PORT", "8000"))
+
+    # Database
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql://ligai:ligai123@localhost:5432/ligai"
+    )
+
+    # Limits
+    MAX_CONCURRENT_CALLS: int = int(os.getenv("MAX_CONCURRENT_CALLS", "15"))
 
     def validate(self) -> list[str]:
         """Valida configurações obrigatórias"""
