@@ -53,6 +53,15 @@ FILLER_DIR_FS = "/var/lib/freeswitch/sounds/custom/fillers"
 _filler_cache: dict[str, tuple[str, str, int]] = {}  # phrase -> (path_app, path_fs, size)
 _filler_ready = False
 
+# Arquivo de greeting pré-gravado
+GREETING_FILE_APP = "/audio/greeting.wav"
+GREETING_FILE_FS = "/var/lib/freeswitch/sounds/custom/greeting.wav"
+GREETING_TEXT = "Olá! Bem-vindo ao atendimento. Como posso ajudar você hoje?"
+
+# Cache do greeting
+_greeting_ready = False
+_greeting_duration_ms = 0
+
 
 async def initialize_fillers():
     """Pré-gera os áudios de filler na inicialização do sistema.
@@ -87,6 +96,9 @@ async def initialize_fillers():
     if existing_fillers == len(FILLER_PHRASES):
         logger.info(f"Todos os {existing_fillers} fillers já existem")
         _filler_ready = True
+
+        # Inicializar greeting mesmo quando fillers já existem
+        await _initialize_greeting()
         return
 
     # Gerar fillers faltantes com Murf
@@ -122,6 +134,40 @@ async def initialize_fillers():
 
     _filler_ready = len(_filler_cache) > 0
     logger.info(f"Fillers inicializados: {len(_filler_cache)}/{len(FILLER_PHRASES)}")
+
+    # Inicializar greeting
+    await _initialize_greeting()
+
+
+async def _initialize_greeting():
+    """Inicializa o áudio de greeting pré-gravado."""
+    global _greeting_ready, _greeting_duration_ms
+
+    if os.path.exists(GREETING_FILE_APP):
+        file_size = os.path.getsize(GREETING_FILE_APP)
+        _greeting_duration_ms = (file_size - 44) / 16  # WAV header = 44 bytes, 8kHz 16-bit
+        _greeting_ready = True
+        logger.info(f"Greeting existente: {_greeting_duration_ms:.0f}ms")
+    else:
+        logger.info("Gerando greeting pré-gravado...")
+        try:
+            murf = MurfClient()
+            audio_data = await murf.text_to_speech(GREETING_TEXT)
+
+            if audio_data:
+                with wave.open(GREETING_FILE_APP, 'wb') as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(8000)
+                    wav_file.writeframes(audio_data)
+
+                _greeting_duration_ms = len(audio_data) / 16  # 8kHz 16-bit = 16 bytes/ms
+                _greeting_ready = True
+                logger.info(f"Greeting gerado: {_greeting_duration_ms:.0f}ms ({len(audio_data)} bytes)")
+            else:
+                logger.warning("Falha ao gerar greeting")
+        except Exception as e:
+            logger.exception(f"Erro ao gerar greeting", error=str(e))
 
 
 def get_random_filler() -> Optional[tuple[str, str, str, int]]:
@@ -206,7 +252,11 @@ REGRAS OBRIGATÓRIAS:
         """Inicia os clientes de STT, TTS e LLM"""
         self.is_running = True
 
-        # Inicializar Deepgram
+        # [NOVO] Tocar greeting PRÉ-GRAVADO imediatamente
+        # Inicia em paralelo com inicialização do Deepgram para reduzir latência
+        greeting_task = asyncio.create_task(self._play_greeting())
+
+        # Inicializar Deepgram (em paralelo com greeting)
         self.deepgram = DeepgramClient(
             on_transcript=self._on_transcript,
             on_speech_started=self._on_speech_started,
@@ -222,8 +272,9 @@ REGRAS OBRIGATÓRIAS:
 
         logger.info("CallHandler iniciado", call_id=self.call_id)
 
-        # Enviar saudação inicial
-        await self._send_greeting()
+        # Aguardar greeting terminar e registrar no histórico
+        greeting_played = await greeting_task
+        await self._send_greeting(skip_audio=greeting_played)
 
     async def stop(self):
         """Encerra a chamada e limpa recursos"""
@@ -410,17 +461,82 @@ REGRAS OBRIGATÓRIAS:
         except Exception as e:
             logger.debug(f"Erro ao tocar filler: {e}")
 
-    async def _send_greeting(self):
-        """Envia saudação inicial"""
-        # Transição: IDLE → SPEAKING (saudação não precisa de PROCESSING)
+    async def _play_greeting(self) -> bool:
+        """Toca greeting pré-gravado via ESL (sem latência TTS)
+
+        Retorna True se o greeting foi tocado com sucesso, False caso contrário.
+        """
+        global _greeting_ready, _greeting_duration_ms
+
+        if not _greeting_ready:
+            logger.debug("Greeting pré-gravado não disponível")
+            return False
+
+        try:
+            reader, writer = await asyncio.open_connection('127.0.0.1', 8021)
+            await reader.readuntil(b'\n\n')
+
+            writer.write(b'auth ClueCon\n\n')
+            await writer.drain()
+            auth_response = await reader.readuntil(b'\n\n')
+
+            if b'+OK' not in auth_response:
+                writer.close()
+                await writer.wait_closed()
+                return False
+
+            cmd = f"api uuid_broadcast {self.freeswitch_uuid} {GREETING_FILE_FS} aleg\n\n"
+            writer.write(cmd.encode())
+            await writer.drain()
+
+            header = await reader.readuntil(b'\n\n')
+            header_str = header.decode()
+
+            content_length = 0
+            for line in header_str.split('\n'):
+                if line.startswith('Content-Length:'):
+                    content_length = int(line.split(':')[1].strip())
+                    break
+
+            if content_length > 0:
+                await reader.readexactly(content_length)
+
+            writer.close()
+            await writer.wait_closed()
+
+            # Aguardar duração do greeting + buffer
+            await asyncio.sleep(_greeting_duration_ms / 1000 + 0.5)
+
+            logger.info("Greeting pré-gravado tocado", call_id=self.call_id)
+            return True
+
+        except Exception as e:
+            logger.debug(f"Erro ao tocar greeting: {e}")
+            return False
+
+    async def _send_greeting(self, skip_audio: bool = False):
+        """Envia saudação inicial
+
+        Args:
+            skip_audio: Se True, o áudio já foi tocado por _play_greeting()
+        """
         self.state = ConversationState.SPEAKING
 
-        greeting = "Olá! Bem-vindo ao atendimento. Como posso ajudar você hoje?"
+        # Usar texto constante para manter consistência com áudio pré-gravado
+        greeting = GREETING_TEXT
         self.conversation_history.append({
             "role": "assistant",
             "content": greeting
         })
-        await self._speak(greeting)
+
+        if skip_audio:
+            # Áudio já foi tocado por _play_greeting()
+            self.state = ConversationState.IDLE
+            logger.info("Greeting registrado no histórico (áudio já tocado)", call_id=self.call_id)
+        else:
+            # Fallback: gerar TTS se greeting pré-gravado não funcionou
+            logger.info("Usando fallback TTS para greeting", call_id=self.call_id)
+            await self._speak(greeting)
 
     async def _speak(self, text: str):
         """

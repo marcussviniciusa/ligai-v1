@@ -124,7 +124,7 @@ async def initiate_call(
     metadata = f'{{\\"uuid\\":\\"{call_id}\\"}}'
 
     originate_cmd = (
-        f"api originate "
+        f"bgapi originate "
         f"{{origination_uuid={call_id},"
         f"ignore_early_media=true,"
         f"api_on_answer='uuid_audio_fork {call_id} start ws://127.0.0.1:8000/ws/{call_id} mono 8000 {metadata}'}}"
