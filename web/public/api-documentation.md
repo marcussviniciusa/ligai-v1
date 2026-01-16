@@ -1157,6 +1157,89 @@ curl -X POST "http://localhost:8000/api/v1/settings/reload"
 
 ---
 
+### Get Greeting
+
+Retrieve information about the pre-recorded greeting audio that plays automatically when a customer answers the call.
+
+```
+GET /api/v1/settings/greeting
+```
+
+**Example:**
+```bash
+curl -X GET "http://localhost:8000/api/v1/settings/greeting"
+```
+
+**Response:**
+```json
+{
+  "text": "Ola! Sou a assistente virtual da LigAI. Como posso ajudar?",
+  "audio_file": "/audio/greeting.wav",
+  "duration_ms": 4500.0,
+  "file_exists": true,
+  "created_at": "2026-01-16T10:30:00"
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| text | string | The greeting text |
+| audio_file | string | Path to the audio file |
+| duration_ms | float | Audio duration in milliseconds |
+| file_exists | boolean | Whether the audio file exists |
+| created_at | string | ISO 8601 datetime of creation |
+
+---
+
+### Generate New Greeting
+
+Generate a new greeting audio using Murf AI Text-to-Speech.
+
+```
+POST /api/v1/settings/greeting
+```
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| text | string | Yes | Greeting text (10-500 characters) |
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/settings/greeting" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Ola! Sou a Julia, assistente virtual da LigAI. Em que posso ajudar?"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "text": "Ola! Sou a Julia, assistente virtual da LigAI. Em que posso ajudar?",
+  "duration_ms": 5200.0,
+  "message": "Greeting gerado com sucesso"
+}
+```
+
+**How it works:**
+1. The text is converted to audio via Murf AI (TTS)
+2. Audio is saved in WAV format (8kHz mono, 16-bit PCM)
+3. The old greeting file is replaced
+4. Future calls will automatically use the new greeting
+
+**Error Response:**
+```json
+{
+  "success": false,
+  "text": "Invalid text",
+  "duration_ms": 0,
+  "message": "Falha ao gerar audio TTS"
+}
+```
+
+---
+
 ## WebSocket
 
 ### Dashboard Real-time Updates

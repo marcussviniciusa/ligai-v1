@@ -686,6 +686,54 @@ export function DocsPage() {
   "message": "Conexao bem-sucedida"
 }`}
           />
+
+          <div className="mt-8 mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Saudacao (Greeting)</h3>
+            <p className="text-gray-600 text-sm mt-1">
+              Gerenciamento do audio de saudacao pre-gravado que e reproduzido quando o cliente atende.
+            </p>
+          </div>
+
+          <Endpoint
+            method="GET"
+            path="/api/v1/settings/greeting"
+            description="Obter saudacao atual"
+            response={`{
+  "text": "Ola! Sou a assistente virtual da LigAI. Como posso ajudar?",
+  "audio_file": "/audio/greeting.wav",
+  "duration_ms": 4500.0,
+  "file_exists": true,
+  "created_at": "2026-01-16T10:30:00"
+}`}
+            curl="curl http://localhost:8000/api/v1/settings/greeting"
+          />
+
+          <Endpoint
+            method="POST"
+            path="/api/v1/settings/greeting"
+            description="Gerar nova saudacao via TTS"
+            body={`{
+  "text": "Ola! Sou a Julia, assistente virtual da LigAI. Em que posso ajudar?"
+}`}
+            response={`{
+  "success": true,
+  "text": "Ola! Sou a Julia, assistente virtual da LigAI. Em que posso ajudar?",
+  "duration_ms": 5200.0,
+  "message": "Greeting gerado com sucesso"
+}`}
+            curl={`curl -X POST http://localhost:8000/api/v1/settings/greeting \\
+  -H "Content-Type: application/json" \\
+  -d '{"text": "Ola! Sou a Julia, assistente virtual."}'`}
+          />
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+            <h4 className="font-medium text-blue-900 mb-2">Como funciona</h4>
+            <ul className="text-blue-800 text-sm space-y-1">
+              <li>1. O texto e convertido em audio via Murf AI (TTS)</li>
+              <li>2. O audio e salvo em formato WAV (8kHz mono, 16-bit PCM)</li>
+              <li>3. Proximas chamadas usarao a nova saudacao automaticamente</li>
+            </ul>
+          </div>
         </Section>
 
         {/* WebSocket */}

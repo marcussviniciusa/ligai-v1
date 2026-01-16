@@ -99,6 +99,9 @@ app = FastAPI(
     description="Sistema de Ligação com Inteligência Artificial",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/api-docs",      # Swagger UI em /api-docs
+    redoc_url="/api-redoc",    # ReDoc em /api-redoc
+    openapi_url="/openapi.json",
 )
 
 # CORS middleware

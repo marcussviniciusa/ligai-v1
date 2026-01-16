@@ -184,6 +184,83 @@ def get_random_filler() -> Optional[tuple[str, str, str, int]]:
     return phrase, path_app, path_fs, size
 
 
+def get_greeting_info() -> dict:
+    """Retorna informacoes do greeting atual para a API"""
+    file_exists = os.path.exists(GREETING_FILE_APP)
+    created_at = None
+
+    if file_exists:
+        mtime = os.path.getmtime(GREETING_FILE_APP)
+        created_at = datetime.fromtimestamp(mtime).isoformat()
+
+    # Ler texto do JSON se existir
+    text = GREETING_TEXT
+    json_file = GREETING_FILE_APP.replace('.wav', '.json')
+    if os.path.exists(json_file):
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+            text = data.get('text', GREETING_TEXT)
+
+    return {
+        "text": text,
+        "audio_file": GREETING_FILE_APP,
+        "duration_ms": _greeting_duration_ms,
+        "file_exists": file_exists,
+        "created_at": created_at
+    }
+
+
+async def generate_new_greeting(text: str) -> dict:
+    """Gera novo audio de greeting com texto personalizado"""
+    global _greeting_ready, _greeting_duration_ms
+
+    try:
+        murf = MurfClient()
+        audio_data = await murf.text_to_speech(text)
+
+        if not audio_data:
+            return {
+                "success": False,
+                "text": text,
+                "duration_ms": 0,
+                "message": "Falha ao gerar audio TTS"
+            }
+
+        # Salvar WAV
+        with wave.open(GREETING_FILE_APP, 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(8000)
+            wav_file.writeframes(audio_data)
+
+        # Salvar JSON com texto
+        json_file = GREETING_FILE_APP.replace('.wav', '.json')
+        with open(json_file, 'w') as f:
+            json.dump({"text": text}, f)
+
+        # Atualizar cache
+        _greeting_duration_ms = len(audio_data) / 16
+        _greeting_ready = True
+
+        logger.info(f"Novo greeting gerado via API: {_greeting_duration_ms:.0f}ms")
+
+        return {
+            "success": True,
+            "text": text,
+            "duration_ms": _greeting_duration_ms,
+            "message": "Greeting gerado com sucesso"
+        }
+
+    except Exception as e:
+        logger.exception("Erro ao gerar greeting via API", error=str(e))
+        return {
+            "success": False,
+            "text": text,
+            "duration_ms": 0,
+            "message": f"Erro: {str(e)}"
+        }
+
+
 class CallHandler:
     """
     Gerencia uma chamada individual
@@ -522,8 +599,17 @@ REGRAS OBRIGATÓRIAS:
         """
         self.state = ConversationState.SPEAKING
 
-        # Usar texto constante para manter consistência com áudio pré-gravado
+        # Ler texto do JSON se existir (para suportar greeting personalizado via API)
         greeting = GREETING_TEXT
+        json_file = GREETING_FILE_APP.replace('.wav', '.json')
+        if os.path.exists(json_file):
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                    greeting = data.get('text', GREETING_TEXT)
+            except Exception:
+                pass  # Usa texto padrão se falhar
+
         self.conversation_history.append({
             "role": "assistant",
             "content": greeting
