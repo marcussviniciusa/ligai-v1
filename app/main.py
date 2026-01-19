@@ -174,6 +174,10 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
         print(f"[WS] Primeira mensagem recebida", flush=True)
 
         # Handle different message types
+        # Variables to store numbers from metadata (for inbound calls)
+        metadata_caller_number = None
+        metadata_called_number = None
+
         if "text" in initial_msg:
             msg_data = initial_msg["text"]
             try:
@@ -181,6 +185,9 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
                 call_id = metadata.get("uuid") or metadata.get("call_id") or freeswitch_uuid or f"call_{id(websocket)}"
                 if not freeswitch_uuid:
                     freeswitch_uuid = metadata.get("uuid")
+                # Extract caller/called numbers from metadata (for inbound calls)
+                metadata_caller_number = metadata.get("caller_number")
+                metadata_called_number = metadata.get("called_number")
             except json.JSONDecodeError:
                 call_id = freeswitch_uuid or msg_data.strip()
         elif "bytes" in initial_msg:
@@ -202,15 +209,26 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
         # Check if we have a pending prompt config for this call
         prompt_config = pending_call_configs.pop(call_id, None)
 
-        # Get called_number from pending config if available
+        # Get called_number from pending config (outbound) or metadata (inbound)
         called_number = "unknown"
+        caller_number = "unknown"
+
         if call_id in pending_call_numbers:
+            # Outbound call via API - get number from pending
             called_number = pending_call_numbers.pop(call_id)
+            logger.info("Chamada outbound - called_number do pending", call_id=call_id, called_number=called_number)
+        elif metadata_called_number:
+            # Inbound call - get numbers from metadata
+            called_number = metadata_called_number
+            caller_number = metadata_caller_number or "unknown"
+            logger.info("Chamada inbound - numeros do metadata", call_id=call_id, caller_number=caller_number, called_number=called_number)
+        else:
+            logger.warning("Numeros nao encontrados - usando unknown", call_id=call_id)
 
         # Create handler for this call
         handler = CallHandler(
             call_id=call_id,
-            caller_number="unknown",
+            caller_number=caller_number,
             called_number=called_number,
             websocket=websocket,
             freeswitch_uuid=freeswitch_uuid,
