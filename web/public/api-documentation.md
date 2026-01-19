@@ -231,6 +231,8 @@ curl -X DELETE "http://localhost:8000/api/v1/calls/1"
 
 ## Prompts
 
+Prompts define the AI behavior and can have their own pre-recorded greeting audio.
+
 ### List All Prompts
 
 ```
@@ -248,7 +250,13 @@ curl -X GET "http://localhost:8000/api/v1/prompts"
   {
     "id": 1,
     "name": "Sales Assistant",
-    "content": "You are a helpful sales assistant...",
+    "description": "Sales team prompt",
+    "system_prompt": "You are a helpful sales assistant...",
+    "voice_id": "pt-BR-isadora",
+    "llm_model": "gpt-4.1-nano",
+    "temperature": 0.7,
+    "greeting_text": "Hello! I'm Julia from sales. How can I help?",
+    "greeting_duration_ms": 5200.0,
     "is_active": true,
     "created_at": "2026-01-15T10:00:00Z",
     "updated_at": "2026-01-15T10:00:00Z"
@@ -299,8 +307,12 @@ POST /api/v1/prompts
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the prompt |
-| content | string | Yes | The prompt content/instructions |
-| is_active | boolean | No | Whether to set as active (default: false) |
+| description | string | No | Description of the prompt |
+| system_prompt | string | Yes | The AI system prompt/instructions |
+| voice_id | string | No | Voice ID for TTS (default: pt-BR-isadora) |
+| llm_model | string | No | LLM model to use (default: gpt-4.1-nano) |
+| temperature | float | No | LLM temperature 0-2 (default: 0.7) |
+| greeting_text | string | No | Custom greeting text (10-500 chars). If provided, generates audio automatically |
 
 **Example:**
 ```bash
@@ -308,10 +320,30 @@ curl -X POST "http://localhost:8000/api/v1/prompts" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Customer Support",
-    "content": "You are a helpful customer support agent...",
-    "is_active": true
+    "system_prompt": "You are a helpful customer support agent...",
+    "greeting_text": "Hello! I am Julia from support. How can I help you today?"
   }'
 ```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "Customer Support",
+  "description": null,
+  "system_prompt": "You are a helpful customer support agent...",
+  "voice_id": "pt-BR-isadora",
+  "llm_model": "gpt-4.1-nano",
+  "temperature": 0.7,
+  "greeting_text": "Hello! I am Julia from support. How can I help you today?",
+  "greeting_duration_ms": null,
+  "is_active": false,
+  "created_at": "2026-01-15T10:00:00Z",
+  "updated_at": "2026-01-15T10:00:00Z"
+}
+```
+
+> **Note:** When `greeting_text` is provided, the audio is generated in the background. The `greeting_duration_ms` will be populated after generation completes.
 
 ---
 
@@ -330,15 +362,21 @@ PUT /api/v1/prompts/{id}
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | name | string | No | Name of the prompt |
-| content | string | No | The prompt content |
-| is_active | boolean | No | Whether prompt is active |
+| description | string | No | Description |
+| system_prompt | string | No | The AI system prompt |
+| voice_id | string | No | Voice ID for TTS |
+| llm_model | string | No | LLM model |
+| temperature | float | No | LLM temperature |
+| greeting_text | string | No | Custom greeting text. If changed, regenerates audio |
 
 **Example:**
 ```bash
 curl -X PUT "http://localhost:8000/api/v1/prompts/1" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Updated Name"}'
+  -d '{"greeting_text": "Hi! I am the new greeting for this prompt."}'
 ```
+
+> **Note:** If `greeting_text` is changed, the greeting audio is regenerated automatically.
 
 ---
 
@@ -360,11 +398,85 @@ curl -X POST "http://localhost:8000/api/v1/prompts/1/activate"
 
 ---
 
+### Get Prompt Greeting
+
+```
+GET /api/v1/prompts/{id}/greeting
+```
+
+Get information about a prompt's custom greeting audio.
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | integer | Yes | The prompt ID |
+
+**Example:**
+```bash
+curl -X GET "http://localhost:8000/api/v1/prompts/1/greeting"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "prompt_id": 1,
+  "text": "Hello! I am Julia from support. How can I help you today?",
+  "duration_ms": 5200.0,
+  "voice_id": "pt-BR-isadora",
+  "message": "Greeting exists"
+}
+```
+
+---
+
+### Regenerate Prompt Greeting
+
+```
+POST /api/v1/prompts/{id}/greeting
+```
+
+Regenerate the greeting audio for a prompt. Useful when you want to use a different voice or re-record with the same text.
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | integer | Yes | The prompt ID |
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| text | string | No | New greeting text (uses existing if not provided) |
+| voice_id | string | No | Voice ID for TTS (uses prompt's voice if not provided) |
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/prompts/1/greeting" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Welcome! I am Julia. How may I assist you?"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "prompt_id": 1,
+  "text": "Welcome! I am Julia. How may I assist you?",
+  "duration_ms": 4800.0,
+  "voice_id": "pt-BR-isadora",
+  "message": "Greeting gerado com sucesso"
+}
+```
+
+---
+
 ### Delete Prompt
 
 ```
 DELETE /api/v1/prompts/{id}
 ```
+
+Deletes the prompt and its associated greeting audio files.
 
 **Path Parameters:**
 | Parameter | Type | Required | Description |
@@ -375,6 +487,22 @@ DELETE /api/v1/prompts/{id}
 ```bash
 curl -X DELETE "http://localhost:8000/api/v1/prompts/1"
 ```
+
+---
+
+### Using Prompt Greeting in Calls
+
+When making a call with `prompt_id`, the system automatically uses the prompt's greeting:
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/calls/dial" \
+  -H "Content-Type: application/json" \
+  -d '{"number": "5511999887766", "prompt_id": 1}'
+```
+
+**Greeting Priority:**
+1. If the prompt has a `greeting_text` → uses the prompt's custom greeting audio
+2. Otherwise → uses the global greeting from `/api/v1/settings/greeting`
 
 ---
 

@@ -28,6 +28,7 @@ from deepgram_client import DeepgramClient
 from murf_client import MurfClient
 from llm_client import LLMClient
 from config import settings
+from services.greeting_service import get_greeting_for_call
 
 logger = structlog.get_logger(__name__)
 
@@ -306,6 +307,12 @@ class CallHandler:
         # Prompt configuration (from database or default)
         self.prompt_config = prompt_config
 
+        # Greeting configuration (from prompt or global)
+        greeting_file, greeting_duration, greeting_text = get_greeting_for_call(prompt_config)
+        self._prompt_greeting_file = greeting_file
+        self._prompt_greeting_duration_ms = greeting_duration
+        self._prompt_greeting_text = greeting_text
+
         # Prompt do sistema para o assistente
         if prompt_config and prompt_config.get("system_prompt"):
             self.system_prompt = prompt_config["system_prompt"]
@@ -541,11 +548,11 @@ REGRAS OBRIGATÓRIAS:
     async def _play_greeting(self) -> bool:
         """Toca greeting pré-gravado via ESL (sem latência TTS)
 
+        Usa o greeting do prompt se disponível, senão usa o greeting global.
         Retorna True se o greeting foi tocado com sucesso, False caso contrário.
         """
-        global _greeting_ready, _greeting_duration_ms
-
-        if not _greeting_ready:
+        # Verificar se há arquivo de greeting disponível
+        if not self._prompt_greeting_file or self._prompt_greeting_duration_ms <= 0:
             logger.debug("Greeting pré-gravado não disponível")
             return False
 
@@ -562,7 +569,8 @@ REGRAS OBRIGATÓRIAS:
                 await writer.wait_closed()
                 return False
 
-            cmd = f"api uuid_broadcast {self.freeswitch_uuid} {GREETING_FILE_FS} aleg\n\n"
+            # Usar o arquivo de greeting configurado (do prompt ou global)
+            cmd = f"api uuid_broadcast {self.freeswitch_uuid} {self._prompt_greeting_file} aleg\n\n"
             writer.write(cmd.encode())
             await writer.drain()
 
@@ -582,9 +590,13 @@ REGRAS OBRIGATÓRIAS:
             await writer.wait_closed()
 
             # Aguardar duração do greeting + buffer
-            await asyncio.sleep(_greeting_duration_ms / 1000 + 0.5)
+            await asyncio.sleep(self._prompt_greeting_duration_ms / 1000 + 0.5)
 
-            logger.info("Greeting pré-gravado tocado", call_id=self.call_id)
+            logger.info(
+                "Greeting pré-gravado tocado",
+                call_id=self.call_id,
+                greeting_file=self._prompt_greeting_file
+            )
             return True
 
         except Exception as e:
@@ -599,16 +611,8 @@ REGRAS OBRIGATÓRIAS:
         """
         self.state = ConversationState.SPEAKING
 
-        # Ler texto do JSON se existir (para suportar greeting personalizado via API)
-        greeting = GREETING_TEXT
-        json_file = GREETING_FILE_APP.replace('.wav', '.json')
-        if os.path.exists(json_file):
-            try:
-                with open(json_file, 'r') as f:
-                    data = json.load(f)
-                    greeting = data.get('text', GREETING_TEXT)
-            except Exception:
-                pass  # Usa texto padrão se falhar
+        # Usar o texto do greeting configurado (do prompt ou global)
+        greeting = self._prompt_greeting_text
 
         self.conversation_history.append({
             "role": "assistant",

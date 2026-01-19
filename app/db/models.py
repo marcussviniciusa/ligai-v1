@@ -35,6 +35,8 @@ class Prompt(Base):
     voice_id: Mapped[str] = mapped_column(String(50), default="pt-BR-isadora")
     llm_model: Mapped[str] = mapped_column(String(50), default="gpt-4.1-nano")
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
+    greeting_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    greeting_duration_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -53,6 +55,8 @@ class Prompt(Base):
             "voice_id": self.voice_id,
             "llm_model": self.llm_model,
             "temperature": self.temperature,
+            "greeting_text": self.greeting_text,
+            "greeting_duration_ms": self.greeting_duration_ms,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

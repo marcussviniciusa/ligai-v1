@@ -349,7 +349,7 @@ export function DocsPage() {
         {/* Prompts */}
         <Section id="prompts" title="Prompts">
           <p className="text-gray-600 mb-6">
-            Gerenciamento de prompts de IA para as chamadas.
+            Gerenciamento de prompts de IA para as chamadas. Cada prompt pode ter seu proprio greeting personalizado.
           </p>
 
           <Endpoint
@@ -365,6 +365,8 @@ export function DocsPage() {
     "voice_id": "pt-BR-isadora",
     "llm_model": "gpt-4.1-nano",
     "temperature": 0.7,
+    "greeting_text": "Ola! Sou a Julia. Como posso ajudar?",
+    "greeting_duration_ms": 5200.0,
     "is_active": true
   }
 ]`}
@@ -374,13 +376,37 @@ export function DocsPage() {
             method="POST"
             path="/api/v1/prompts"
             description="Cria um novo prompt"
+            params={[
+              { name: 'name', type: 'string', required: true, description: 'Nome do prompt' },
+              { name: 'system_prompt', type: 'string', required: true, description: 'Instrucoes para a IA' },
+              { name: 'greeting_text', type: 'string', required: false, description: 'Texto da saudacao (10-500 chars). Gera audio automaticamente' },
+              { name: 'voice_id', type: 'string', required: false, description: 'ID da voz (padrao: pt-BR-isadora)' },
+            ]}
             body={`{
   "name": "Vendas",
   "description": "Prompt para vendas",
   "system_prompt": "Voce e um vendedor...",
   "voice_id": "pt-BR-isadora",
-  "llm_model": "gpt-4.1-nano",
-  "temperature": 0.7
+  "greeting_text": "Ola! Sou a Julia de vendas. Como posso ajudar?"
+}`}
+            response={`{
+  "id": 1,
+  "name": "Vendas",
+  "greeting_text": "Ola! Sou a Julia de vendas. Como posso ajudar?",
+  "greeting_duration_ms": null,
+  "is_active": false
+}`}
+          />
+
+          <Endpoint
+            method="PUT"
+            path="/api/v1/prompts/{id}"
+            description="Atualiza um prompt"
+            params={[
+              { name: 'id', type: 'int', required: true, description: 'ID do prompt' },
+            ]}
+            body={`{
+  "greeting_text": "Nova saudacao personalizada para este prompt."
 }`}
           />
 
@@ -392,6 +418,62 @@ export function DocsPage() {
               { name: 'id', type: 'int', required: true, description: 'ID do prompt' },
             ]}
           />
+
+          <div className="mt-8 mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Greeting por Prompt</h3>
+            <p className="text-gray-600 text-sm mt-1">
+              Cada prompt pode ter sua propria saudacao pre-gravada. Ao fazer uma chamada com prompt_id, o sistema usa automaticamente o greeting desse prompt.
+            </p>
+          </div>
+
+          <Endpoint
+            method="GET"
+            path="/api/v1/prompts/{id}/greeting"
+            description="Obter info do greeting do prompt"
+            params={[
+              { name: 'id', type: 'int', required: true, description: 'ID do prompt' },
+            ]}
+            response={`{
+  "success": true,
+  "prompt_id": 1,
+  "text": "Ola! Sou a Julia de vendas. Como posso ajudar?",
+  "duration_ms": 5200.0,
+  "voice_id": "pt-BR-isadora",
+  "message": "Greeting exists"
+}`}
+            curl="curl http://localhost:8000/api/v1/prompts/1/greeting"
+          />
+
+          <Endpoint
+            method="POST"
+            path="/api/v1/prompts/{id}/greeting"
+            description="Regenerar greeting do prompt"
+            params={[
+              { name: 'id', type: 'int', required: true, description: 'ID do prompt' },
+            ]}
+            body={`{
+  "text": "Nova saudacao para regenerar o audio",
+  "voice_id": "pt-BR-isadora"
+}`}
+            response={`{
+  "success": true,
+  "prompt_id": 1,
+  "text": "Nova saudacao para regenerar o audio",
+  "duration_ms": 4800.0,
+  "message": "Greeting gerado com sucesso"
+}`}
+            curl={`curl -X POST http://localhost:8000/api/v1/prompts/1/greeting \\
+  -H "Content-Type: application/json" \\
+  -d '{"text": "Ola! Nova saudacao."}'`}
+          />
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+            <h4 className="font-medium text-blue-900 mb-2">Prioridade do Greeting</h4>
+            <ul className="text-blue-800 text-sm space-y-1">
+              <li>1. Se o prompt tem <code>greeting_text</code> → usa o greeting do prompt</li>
+              <li>2. Senao → usa o greeting global de <code>/api/v1/settings/greeting</code></li>
+            </ul>
+          </div>
         </Section>
 
         {/* Webhooks */}
