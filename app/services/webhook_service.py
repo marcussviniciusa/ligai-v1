@@ -117,7 +117,7 @@ async def _send_webhook(
                     logger.info(
                         "Webhook delivered successfully",
                         url=url,
-                        event=event_type
+                        event_name=event_type
                     )
 
     except Exception as e:

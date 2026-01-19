@@ -71,12 +71,15 @@ class MurfClient:
                 "voiceId": self.voice_id,
                 "style": self.style,
                 "format": "WAV",
-                "sampleRate": 24000,  # Murf gera em 24kHz, vamos converter
+                "sampleRate": 48000,  # Gerar em alta qualidade
                 "channelType": "MONO",
-                "speed": 0.9,  # Velocidade um pouco mais lenta (0.5 a 2.0, 1.0 é normal)
+                "speed": 1.0,  # Velocidade normal
+                "pitch": 0,  # Tom natural
                 "pronunciationDictionary": {},
                 "encodeAsBase64": False,
-                "modelVersion": "GEN2"  # Usar modelo mais recente
+                "modelVersion": "GEN2",
+                "audioDuration": 0,
+                "variation": 1  # Mais variação na entonação
             }
 
             logger.debug("Gerando áudio com Murf", text_length=len(text))
