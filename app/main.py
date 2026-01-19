@@ -214,16 +214,12 @@ async def freeswitch_websocket(websocket: WebSocket, uuid: Optional[str] = None)
         caller_number = "unknown"
 
         if call_id in pending_call_numbers:
-            # Outbound call via API - get number from pending
+            # Outbound call via API
             called_number = pending_call_numbers.pop(call_id)
-            logger.info("Chamada outbound - called_number do pending", call_id=call_id, called_number=called_number)
         elif metadata_called_number:
-            # Inbound call - get numbers from metadata
+            # Inbound call (if enabled)
             called_number = metadata_called_number
             caller_number = metadata_caller_number or "unknown"
-            logger.info("Chamada inbound - numeros do metadata", call_id=call_id, caller_number=caller_number, called_number=called_number)
-        else:
-            logger.warning("Numeros nao encontrados - usando unknown", call_id=call_id)
 
         # Create handler for this call
         handler = CallHandler(

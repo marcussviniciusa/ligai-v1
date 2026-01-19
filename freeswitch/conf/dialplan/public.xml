@@ -1,39 +1,16 @@
 <?xml version="1.0"?>
 <!--
-    LigAI - Dialplan para chamadas do SIP Trunk (entrantes)
-    Usa mod_audio_fork para streaming bidirecional com IA
+    LigAI - Dialplan para chamadas do SIP Trunk
+    SOMENTE chamadas outbound são permitidas
 -->
 <include>
   <context name="public">
 
-    <!-- SECURITY: Block unauthorized IPs -->
-    <extension name="block-unauthorized" continue="true">
-      <condition field="${network_addr}" expression="^208\.110\.64\.186$">
-        <action application="log" data="WARNING [LigAI] Blocked call from unauthorized IP: ${network_addr}"/>
-        <action application="hangup" data="CALL_REJECTED"/>
-      </condition>
-    </extension>
-
-    <!-- Chamadas entrantes do SIP Trunk -->
-    <extension name="ligai-inbound">
+    <!-- BLOQUEAR todas as chamadas inbound - sistema é somente outbound -->
+    <extension name="block-all-inbound">
       <condition field="destination_number" expression="^(.*)$">
-        <action application="log" data="INFO [LigAI] Chamada entrante de ${caller_id_number} para ${destination_number}"/>
-
-        <!-- Configurações de áudio -->
-        <action application="set" data="RECORD_STEREO=false"/>
-        <action application="set" data="jitterbuffer_msec=60:200:40"/>
-
-        <!-- Configurar para iniciar streaming após atender (com metadata JSON para passar UUID) -->
-        <action application="set" data="api_on_answer=uuid_audio_fork ${uuid} start ws://127.0.0.1:8000/ws/${uuid} mono 8000 {&quot;uuid&quot;:&quot;${uuid}&quot;,&quot;caller_number&quot;:&quot;${caller_id_number}&quot;,&quot;called_number&quot;:&quot;${destination_number}&quot;}"/>
-
-        <!-- Atender a chamada -->
-        <action application="answer"/>
-        <action application="sleep" data="500"/>
-
-        <action application="log" data="INFO [LigAI] Streaming audio_fork iniciado para ws://127.0.0.1:8765"/>
-
-        <!-- Manter chamada ativa -->
-        <action application="park"/>
+        <action application="log" data="WARNING [LigAI] Chamada INBOUND bloqueada de ${caller_id_number} para ${destination_number}"/>
+        <action application="hangup" data="CALL_REJECTED"/>
       </condition>
     </extension>
 
